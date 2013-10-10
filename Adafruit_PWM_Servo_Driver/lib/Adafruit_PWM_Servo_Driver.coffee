@@ -1,5 +1,6 @@
 
-I2C = require('i2c')
+I2C = require 'i2c'
+sleep = require 'sleep'
 
 # ============================================================================
 # Adafruit PCA9685 16-Channel PWM Servo Driver
@@ -9,61 +10,91 @@ class PWMDriver
   i2c = null
 
   # Registers/etc.
-  __SUBADR1            = 0x02
-  __SUBADR2            = 0x03
-  __SUBADR3            = 0x04
-  __MODE1              = 0x00
-  __PRESCALE           = 0xFE
-  __LED0_ON_L          = 0x06
-  __LED0_ON_H          = 0x07
-  __LED0_OFF_L         = 0x08
-  __LED0_OFF_H         = 0x09
-  __ALLLED_ON_L        = 0xFA
-  __ALLLED_ON_H        = 0xFB
-  __ALLLED_OFF_L       = 0xFC
-  __ALLLED_OFF_H       = 0xFD
+  __SUBADR1            : 0x02
+  __SUBADR2            : 0x03
+  __SUBADR3            : 0x04
+  __MODE1              : 0x00
+  __PRESCALE           : 0xFE
+  __LED0_ON_L          : 0x06
+  __LED0_ON_H          : 0x07
+  __LED0_OFF_L         : 0x08
+  __LED0_OFF_H         : 0x09
+  __ALLLED_ON_L        : 0xFA
+  __ALLLED_ON_H        : 0xFB
+  __ALLLED_OFF_L       : 0xFC
+  __ALLLED_OFF_H       : 0xFD
 
-  constructor:(device, address, debug)->
-	@address = address or 0x40
-	@device = device or 1
-	@debug = debug or False
-	@i2c = new I2C(@address, {device: @device})
-    
+  constructor:(address,device, debug)->
+    @address = address or 0x40
+    @device = device or 1
+    @debug = debug or false
+    @i2c = new I2C(@address, device: @device)
+      
     if (@debug)
-      console.log "Reseting PCA9685"
+      console.log "device #{device}, adress:#{address}, debug:#{debug}" 
+      console.log "Reseting PCA9685" , "mode1:", @__MODE1
+      
+    @_send(@__MODE1, 0x00)
 
-    @i2c.writeByte(@__MODE1, 0x00)
+    if (@debug)
+      console.log "init done"
+   
+  _send:(cmd, values)->
+    console.log "cmd #{cmd} values #{values}"
+    @i2c.writeBytes cmd, values, (err)=>
+      if err?
+        console.log "Error: in I2C", err
+      
+  _read:(cmd, length, callback) ->
+    @i2c.readBytes cmd, length, callback
+  
+  scan:->
+    console.log "scanning I2c devices"
+    @i2c.scan (err, data)=>
+      if err?
+        console.log "error", err
+      console.log "data", data
+      # result contains an array of addresses
 
-  _send: (cmd, values) ->
-    @i2c.writeBytes cmd, values, (err) ->
-      console.log err
-
+  _step2:(err, res)=>
+    if err?
+      console.log "error", err
+    oldmode = res[0]
+    console.log "oldmode", oldmode
+    newmode = (oldmode & 0x7F) | 0x10             # sleep
+    prescale = @prescale
+    @_send(@__MODE1, newmode)        # go to sleep
+    @_send(@__PRESCALE, Math.floor(prescale))
+    @_send(@__MODE1, oldmode)
+    sleep.usleep(5000)
+    @_send(@__MODE1, oldmode | 0x80)
+      
   setPWMFreq:(freq)->
     #"Sets the PWM frequency"
+    console.log "Debug", @debug
     prescaleval = 25000000.0    # 25MHz
     prescaleval /= 4096.0       # 12-bit
-    prescaleval /= float(freq)
+    #prescaleval /= float(freq)
     prescaleval -= 1.0
     if @debug
-      console.log "Setting PWM frequency to %d Hz" % freq
-      console.log "Estimated pre-scale: %d" % prescaleval
-    prescale = math.floor(prescaleval + 0.5)
+      console.log "Setting PWM frequency to #{freq} Hz" 
+      console.log "Estimated pre-scale: #{prescaleval}" 
+    prescale = Math.floor(prescaleval + 0.5)
     if @debug
-      console.log "Final pre-scale: %d" % prescale
+      console.log "Final pre-scale: #{prescale}"
 
-    oldmode = @i2c.readU8(@__MODE1);
-    newmode = (oldmode & 0x7F) | 0x10             # sleep
-    @i2c.writeByte(@__MODE1, newmode)        # go to sleep
-    @i2c.writeByte(@__PRESCALE, int(math.floor(prescale)))
-    @i2c.writeByte(@__MODE1, oldmode)
-    #time.sleep(0.005)
-    @i2c.writeByte(@__MODE1, oldmode | 0x80)
+    @prescale = prescale
+    @_read(@__MODE1, 1, @_step2)
+    
 
-  setPWM:(channel, on, off)->
+  setPWM:(channel, on_, off_)->
     #"Sets a single PWM channel"
-    @i2c.writeByte(@__LED0_ON_L+4*channel, on & 0xFF)
-    @i2c.writeByte(@__LED0_ON_H+4*channel, on >> 8)
-    @i2c.writeByte(@__LED0_OFF_L+4*channel, off & 0xFF)
-    @i2c.writeByte(@__LED0_OFF_H+4*channel, off >> 8)
+    if @debug
+      console.log "Setting PWM channel, channel: #{channel}, on : #{on_} off #{off_}"
+      
+    @_send(@__LED0_ON_L+4*channel, on_ & 0xFF)
+    @_send(@__LED0_ON_H+4*channel, on_ >> 8)
+    @_send(@__LED0_OFF_L+4*channel, off_ & 0xFF)
+    @_send(@__LED0_OFF_H+4*channel, off_ >> 8)
 
 module.exports = PWMDriver
