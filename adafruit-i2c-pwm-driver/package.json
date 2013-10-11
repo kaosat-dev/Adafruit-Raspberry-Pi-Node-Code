@@ -1,12 +1,12 @@
 {
-  "name": "Adafruit_PWM_Servo_Driver_node",
+  "name": "adafruit-i2c-pwm-driver",
   "version": "0.0.1",
-  "description": "node.js control for the Adafruit PWM servo driver",
+  "description": "node.js /i2c control for the Adafruit PWM servo driver",
   "main": "main.js",
   "author": "Mark Moissette",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kaosat-dev/Adafruit-Raspberry-Pi-Node-Code/tree/master/Adafruit_PWM_Servo_Driver"
+    "url": "https://github.com/kaosat-dev/adafruit-i2c-pwm-driver"
   },
   "license": "MIT",
   "dependencies": {
