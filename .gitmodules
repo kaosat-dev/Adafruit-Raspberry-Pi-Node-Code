@@ -1,0 +1,3 @@
+[submodule "adafruit-i2c-pwm-driver"]
+	path = adafruit-i2c-pwm-driver
+	url = git@github.com:kaosat-dev/adafruit-i2c-pwm-driver.git
