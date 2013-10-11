@@ -24,6 +24,8 @@ class PWMDriver
   __ALLLED_OFF_L       : 0xFC
   __ALLLED_OFF_H       : 0xFD
 
+  #__RESET  	       : 0x0H
+
   constructor:(address,device, debug)->
     @address = address or 0x40
     @device = device or 1
@@ -33,18 +35,28 @@ class PWMDriver
     if (@debug)
       console.log "device #{device}, adress:#{address}, debug:#{debug}" 
       console.log "Reseting PCA9685" , "mode1:", @__MODE1
-      
     @_send(@__MODE1, 0x00)
 
     if (@debug)
       console.log "init done"
    
   _send:(cmd, values)->
-    console.log "cmd #{cmd} values #{values}"
+    ###
+    console.log "cmd #{cmd.toString(16)} values #{values}"
+    sys = require('sys')
+    exec = require('child_process').exec;
+    puts=(error, stdout, stderr)->
+      sys.puts(stdout)
+    exec("i2cset -y 1 0x40 #{cmd} #{values}", puts)
+    ###
+
+    if not (values instanceof Array)
+      values = [values]
+    console.log "cmd #{cmd.toString(16)} values #{values}"
     @i2c.writeBytes cmd, values, (err)=>
       if err?
         console.log "Error: in I2C", err
-      
+
   _read:(cmd, length, callback) ->
     @i2c.readBytes cmd, length, callback
   
@@ -54,35 +66,41 @@ class PWMDriver
       if err?
         console.log "error", err
       console.log "data", data
-      # result contains an array of addresses
 
   _step2:(err, res)=>
     if err?
       console.log "error", err
+
+    console.log "result buffer", res
     oldmode = res[0]
-    console.log "oldmode", oldmode
+    console.log "oldmode", oldmode, "asHex", oldmode.toString(16)
+
     newmode = (oldmode & 0x7F) | 0x10             # sleep
     prescale = @prescale
+    console.log("prescale", Math.floor(prescale),"newMode", newmode.toString(16))
+
     @_send(@__MODE1, newmode)        # go to sleep
     @_send(@__PRESCALE, Math.floor(prescale))
     @_send(@__MODE1, oldmode)
-    sleep.usleep(5000)
+    #sleep.usleep(5000)
+    sleep.usleep(10000)
     @_send(@__MODE1, oldmode | 0x80)
-      
+    
   setPWMFreq:(freq)->
     #"Sets the PWM frequency"
     console.log "Debug", @debug
     prescaleval = 25000000.0    # 25MHz
     prescaleval /= 4096.0       # 12-bit
-    #prescaleval /= float(freq)
+    prescaleval /= freq
     prescaleval -= 1.0
+
     if @debug
       console.log "Setting PWM frequency to #{freq} Hz" 
       console.log "Estimated pre-scale: #{prescaleval}" 
     prescale = Math.floor(prescaleval + 0.5)
     if @debug
       console.log "Final pre-scale: #{prescale}"
-
+    
     @prescale = prescale
     @_read(@__MODE1, 1, @_step2)
     
